@@ -1,0 +1,396 @@
+---
+title: 'The Emotional Impact of Drone Warfare on the Ground '
+author: "Sofia Quaglia"
+date: '2022-08-19'
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, echo = FALSE}
+
+# Loading libraries 
+
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(quanteda)
+library(quanteda.textmodels)
+library(quanteda.textstats)
+library(quanteda.textplots)
+library(rvest)
+library(readr)
+library(readxl)
+library(readtext)
+library(rio)
+library(stopwords)
+library(tidyverse)
+```
+
+_DATASET_
+
+```{r, echo = FALSE}
+# Load saved dataset and overview of dataset
+
+dat_tweets <- read.csv("C:/Users/Sofias PC/OneDrive - University College Dublin/MSc Thesis Data Science and Politics/snscrape_tweets_june_kids_2009.csv")
+names(dat_tweets)
+
+
+#myfunc <- function(x,y){dat_tweets[dat_tweets$Datetime >= x & dat_tweets$Datetime <= y,]}
+
+#DATE1 <- as.Date("2009-09-23")
+#DATE2 <- as.Date("2010-09-30")
+
+#Test_H2 <- myfunc(DATE1,DATE2)
+
+# getting specific dates
+
+#myfunc <- function(x,y){dat_tweets[dat_tweets$Datetime >= x & dat_tweets$Datetime <= y,]}
+
+#DATE1 <- as.Date("2009-10-30")
+#DATE2 <- as.Date("2009-10-30")
+
+#dat_tweets <- myfunc(DATE1,DATE2)
+
+
+# Transforming the dataset into a quanteda corpus
+corp_tweets <- corpus(dat_tweets, text_field = "Text")
+
+# Transforming the subset into a quanteda corpus 
+
+#corp_subset <- corpus(Test_H2, text_field = "Text")
+
+#corp_subset <- cbind(corp_subset, Date = Test_H2$Datetime)
+```
+
+_LEXICON_ 
+
+```{r, echo = FALSE}
+# importing the NRC lexicon
+
+dat_dic <- rio::import("C:/Users/Sofias PC/OneDrive - University College Dublin/MSc Thesis Data Science and Politics/NRC-Emotion-Lexicon-v0.92-In105Languages-Nov2017Translations.xlsx")
+
+# select only English and the relevant categories in a new data frame
+
+dat_eng_dic <- dat_dic %>% 
+  select(starts_with("English"), Positive:Trust)
+
+names(dat_eng_dic)
+
+head(dat_eng_dic)
+
+nrow(dat_eng_dic)
+
+
+# now transform dictionary to "long" format
+
+dat_eng_dic_long <- dat_eng_dic %>% 
+  rename(word = 'English (en)...1') %>% 
+  gather(sentiment, score, -word)
+
+head(dat_eng_dic_long)
+
+# note: only words with a score of 1 belong to the respective category
+
+# therefore, I only "filter" terms with scores of 1
+
+dat_eng_dic_scored <- filter(dat_eng_dic_long, 
+                            score == 1)
+
+# you can check whether these scores make sense
+head(dat_eng_dic_scored)
+
+# get number of scored terms
+nrow(dat_eng_dic_scored)
+
+# remove "NO TRANSLATION" and get each term only once per category
+
+dat_eng_dic_scored <- filter(dat_eng_dic_scored, word != "NO TRANSLATION") %>% 
+  unique()
+
+nrow(dat_eng_dic_scored)
+
+dict_english <- as.dictionary(dat_eng_dic_scored)
+
+```
+
+_SENTIMENT ANALYSIS on the entire dataset _
+
+```{r, echo = FALSE}
+
+# tokenise and apply dictionary
+
+
+dat_with_dict_tweets <- corp_tweets %>% 
+  tokens() %>% 
+  tokens_remove(stopwords(language = "en", source = 'marimo')) %>% 
+  tokens(remove_punct = TRUE) %>% 
+  tokens_lookup(dictionary = dict_english, nested_scope = "dictionary") %>% 
+  dfm()
+
+FINAL_dat_with_dic_tweets <- quanteda::convert(dat_with_dict_tweets, to = "data.frame")
+
+View(FINAL_dat_with_dic_tweets)
+
+summary(FINAL_dat_with_dic_tweets)
+
+# Most frequent positive words
+corp_tweets %>%
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Positive) %>%
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most frequent negative words
+
+corp_tweets %>%
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Negative) %>%
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most frequent words related to discrete emotion anger
+corp_tweets %>% 
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Anger) %>% 
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most frequent words related to discrete emotion fear
+corp_tweets %>% 
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Fear) %>% 
+  dfm() %>% 
+  topfeatures(n = 30)
+
+FINAL_dat_with_dic_tweets
+
+# Getting rid of NA values 
+
+FINAL_dat_with_dic_tweets_NO_NA <- na.omit(FINAL_dat_with_dic_tweets) 
+
+# Getting the summary 
+
+kable(summary(FINAL_dat_with_dic_tweets_NO_NA))
+
+
+FINAL_dat_with_dic_tweets_NO_NA$average_positive <- mean(FINAL_dat_with_dic_tweets_NO_NA$positive)
+FINAL_dat_with_dic_tweets_NO_NA$average_negative <- mean(FINAL_dat_with_dic_tweets_NO_NA$negative)
+FINAL_dat_with_dic_tweets_NO_NA$average_anger <- mean(FINAL_dat_with_dic_tweets_NO_NA$anger)
+FINAL_dat_with_dic_tweets_NO_NA$average_fear <- mean(FINAL_dat_with_dic_tweets_NO_NA$fear)
+
+
+average_positive <- mean(FINAL_dat_with_dic_tweets_NO_NA$positive)
+average_negative <- mean(FINAL_dat_with_dic_tweets_NO_NA$negative)
+average_anger <- mean(FINAL_dat_with_dic_tweets_NO_NA$anger)
+average_fear <- mean(FINAL_dat_with_dic_tweets_NO_NA$fear)
+
+
+# Plot multivariable for sentiment on entire dataset 
+
+ggplot(data=df1, aes(x=name, y=value)) + geom_bar(stat="identity") + labs(x = "Average Sentiment and Discrete Emotions", y = "Values")
+
+
+
+
+```
+_H2: Sentiment Analysis Using NRC lexicon on subset of dataset 2010-09-01/2010-12-31_
+```{r, echo = FALSE}
+# tokenise and apply dictionary
+
+test_with_dic <- corp_subset %>% 
+  tokens() %>% 
+  tokens_remove(stopwords(language = "en", source = 'marimo')) %>% 
+  tokens(remove_punct = TRUE) %>% 
+  tokens_lookup(dictionary = dict_english, nested_scope = "dictionary") %>% 
+  dfm()
+
+test_with_dic <- quanteda::convert(test_with_dic, to = "data.frame")
+
+View(test_with_dic)
+
+summary(test_with_dic)
+
+# Most frequent positive words
+corp_subset %>%
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Positive) %>%
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most frequent negative words
+
+corp_subset %>%
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Negative) %>%
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most frequent words related to discrete emotion anger
+corp_subset %>% 
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Anger) %>% 
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most frequent words related to discrete emotion fear
+corp_subset %>% 
+  tokens() %>% 
+  tokens_keep(pattern = dict_english$Fear) %>% 
+  dfm() %>% 
+  topfeatures(n = 30)
+
+test_with_dic
+
+# Getting the summary 
+
+kable(summary(test_with_dic))
+
+test_with_dic$average_positive <- mean(test_with_dic$positive)
+test_with_dic$average_negative <- mean(test_with_dic$negative)
+test_with_dic$average_anger <- mean(test_with_dic$anger)
+test_with_dic$average_fear <- mean(test_with_dic$fear)
+
+average_positive <- mean(test_with_dic$positive)
+average_negative <- mean(test_with_dic$negative)
+average_anger <- mean(test_with_dic$anger)
+average_fear <- mean(test_with_dic$fear)
+
+
+#create data frame with two columns
+df2 <- data.frame(
+  name = c("Average Positive", "Average Negative", "Average Anger", "Average Fear"),
+  value = c(average_positive, average_negative, average_anger, average_fear)
+)
+# Plot multivariable for sentiment on subset 
+
+ggplot(data=df1, aes(x=name, y=value)) + geom_bar(stat="identity") + labs(x = "Average Sentiment and Discrete Emotions", y = "Values") 
+
+
+
+
+
+
+
+```
+
+
+_ H1: Sentiment Analysis Using the Lexicoder Sentiment Dictionary_
+```{r, echo = FALSE} 
+# Tokenise and apply dictionary
+
+dat_dict <- corp_tweets %>% 
+  tokens() %>% 
+  tokens_remove(stopwords(language = "en", source = 'marimo')) %>% 
+  tokens(remove_punct = TRUE) %>% 
+  tokens_lookup(dictionary = data_dictionary_LSD2015,
+                nested_scope = "dictionary") %>% 
+  dfm()
+
+FINAL_dat_dict <- quanteda::convert(dat_dict, to = "data.frame")
+View(FINAL_dat_dict)
+summary(FINAL_dat_dict)
+
+# SIMPLE FREQUENCY ANALYSIS  
+
+## Most Frequent Words 
+
+data(corp_tweets, package = "quanteda.textmodels")
+
+tweets_dfm <- tokens(corp_tweets, remove_punct = TRUE, 
+                     remove_symbols = TRUE) %>%
+  tokens_remove(stopwords("en")) %>%
+  dfm()
+textstat_frequency(tweets_dfm, n = 10)
+
+## Plotting the most frequent words 
+
+tweets_freq_plot <- tweets_dfm %>%
+  textstat_frequency(n = 50) %>%
+  ggplot(aes(x = reorder (feature, frequency), 
+             y = frequency)) + 
+  geom_point() +
+  coord_flip() +
+  labs(x = NULL, y = "Frequency")
+
+ tweets_freq_plot 
+
+## Most Frequent Positive Words
+
+corp_tweets %>% 
+  tokens() %>% 
+  tokens_keep(pattern = data_dictionary_LSD2015$positive) %>%
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Most Frequent Negative Words
+
+corp_tweets %>% 
+  tokens() %>% 
+  tokens_keep(pattern = data_dictionary_LSD2015$negative) %>%
+  dfm() %>% 
+  topfeatures(n = 30)
+
+# Estimate Sentiment 
+
+FINAL_dat_dict <- FINAL_dat_dict %>%
+  mutate(sentiment = log((positive + neg_negative + 0.5) / (negative + neg_positive + 0.5)))
+
+FINAL_dat_dict$doc_id <- corp_tweets$doc_id
+
+# Plot Sentiment H1
+
+p_sent <- ggplot(data = FINAL_dat_dict,
+                 mapping = aes(x = sentiment, 
+                     y = row.names(FINAL_dat_dict))) + geom_col() + labs(x = "Estimated Sentiment", y = "Pakistani Civilians Tweets") 
+p_sent
+
+
+```
+
+_ H3: plot Sentiment Analysis on kids srike_
+```{r, echo = FALSE} 
+
+# getting the averages for fear anger and sentiment for individual dates in two datasets
+#df10 <- data.frame(
+  #name = c("Average Positive", "Average Negative", "Average Anger", "Average Fear"),
+  #value = c(average_positive, average_negative, average_anger, average_fear),
+  #date = c("2009-10-30")
+#)
+
+appendedDf_Kids <- rbind(df1, df2, df3)
+
+appendedDf_Militants <- rbind(df5, df6, df7, df8, df9, df10)
+
+
+
+# targeted sentiment and discrete emotion analysis june 2009
+
+p_targeted <- ggplot(data = appendedDf_Kids,
+aes(x = value,
+y = reorder(date, value))) + geom_point() +
+facet_grid(name~., space = "free", scales = "free_y") + #
+labs(x = "Average Sentiment and Discrete Emotion", y = "Dates")
+
+p_targeted
+
+# targeted sentiment and discrete emotion analysis october 2009
+
+p_targeted2 <- ggplot(data = appendedDf_Militants,
+aes(x = value,
+y = reorder(date, value))) + geom_point() +
+facet_grid(name~., space = "free", scales = "free_y") + #
+labs(x = "Average Sentiment and Discrete Emotion", y = "Dates")
+
+p_targeted2
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
